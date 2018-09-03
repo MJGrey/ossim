@@ -18,6 +18,8 @@
 #include <ossim/util/ossimViewshedTool.h>
 #include <ossim/util/ossimSubImageTool.h>
 #include <ossim/util/ossimPointCloudTool.h>
+#include <ossim/util/ossimEqualityTest.h>
+
 #if OSSIM_HAS_HDF5
 #include <ossim/hdf5/ossimHdf5Tool.h>
 #endif
@@ -78,6 +80,9 @@ ossimTool* ossimToolFactory::createTool(const std::string& argName) const
    if ((utilName == "pointcloud") || (argName == "ossimPointCloudTool"))
       return new ossimPointCloudTool;
 
+   if ((utilName == "equalityTest") || (argName == "ossimEqualityTest"))
+      return new ossimEqualityTest;
+
 #if OSSIM_HAS_HDF5
    if ((utilName == "hdf5") || (argName == "ossimHdf5Tool"))
       return new ossimHdf5Tool;
@@ -98,6 +103,8 @@ void ossimToolFactory::getCapabilities(std::map<std::string, std::string>& capab
    capabilities.insert(pair<string, string>("vertices", ossimVerticesFinderTool::DESCRIPTION));
    capabilities.insert(pair<string, string>("bandmerge", ossimBandMergeTool::DESCRIPTION));
    capabilities.insert(pair<string, string>("subimage", ossimSubImageTool::DESCRIPTION));
+   capabilities.insert(pair<string, string>("pointcloud", ossimPointCloudTool::DESCRIPTION));
+   capabilities.insert(pair<string, string>("equalityTest", ossimEqualityTest::DESCRIPTION));
 #if OSSIM_HAS_HDF5
    capabilities.insert(pair<string, string>("hdf5", ossimHdf5Tool::DESCRIPTION));
 #endif

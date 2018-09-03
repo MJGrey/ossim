@@ -2718,18 +2718,18 @@ void ossimInfo::printFactories(bool keywordListFlag)const
          ossimObject* obj = ossimObjectFactoryRegistry::instance()->createObject(typeList[i]);
          if(obj)
          {
-            cout << typeList[i] << endl;
-            cout << "______________________________________________________" << endl;
+            (*m_consoleStream) << typeList[i] << endl;
+            (*m_consoleStream) << "______________________________________________________" << endl;
             ossimKeywordlist kwl;
             obj->saveState(kwl);
-            cout << kwl << endl;
-            cout << "______________________________________________________" << endl;
+            (*m_consoleStream) << kwl << endl;
+            (*m_consoleStream) << "______________________________________________________" << endl;
             delete obj;
          }
       }
       else
       {
-         cout << typeList[i] << endl;
+         (*m_consoleStream) << typeList[i] << endl;
       }
    }  
 }

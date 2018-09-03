@@ -115,139 +115,141 @@ void vpf_dump_table( char *tablename, char *outname )
    fprintf(fp,"Definition:\n");
    for (i=0;i<table.nfields;i++) {
       if (table.header[i].count < 0)
-	 fprintf(fp,"%s (%c,*)  %s\n",
-		 table.header[i].name,table.header[i].type,
-		 table.header[i].description);
+         fprintf(fp,"%s (%c,*)  %s\n",
+                 table.header[i].name,table.header[i].type,
+                 table.header[i].description);
       else
-	 fprintf(fp,"%s (%c,%ld)  %s\n",
-		 table.header[i].name,table.header[i].type,
-		 table.header[i].count,table.header[i].description);
+         fprintf(fp,"%s (%c,%d)  %s\n",
+                 table.header[i].name,table.header[i].type,
+                 table.header[i].count,table.header[i].description);
    }
 
    fprintf(fp,"\nContents:\n");
    for (i=1;i<=table.nrows;i++) {
       row = read_next_row(table);
       for (j=0;j<table.nfields;j++) {
-	 fprintf(fp,"%s: ",table.header[j].name);
-	 switch (table.header[j].type) {
-	    case 'T':
-	       if (table.header[j].count==1) {
-		  get_table_element(j,row,table,&ch,&n);
-		  fprintf(fp,"%c\n",ch);
-	       } else {
-		  buf = (char *)get_table_element(j,row,table,NULL,&n);
-		  n = (long)strlen(table.header[j].name) + 2;
-		  for (k=0;(unsigned int)k<strlen(buf);k++) {
-		     fprintf(fp,"%c",buf[k]);
-		     n++;
-		     if (n>80) {
-			fprintf(fp,"\n");
-			n = 0;
-		     }
-		  }
-		  fprintf(fp,"\n");
-		  free(buf);
-	       }
-	       break;
-	    case 'I':
-	       if (table.header[j].count==1) {
-		  get_table_element(j,row,table,&lval,&n);
-		  if (lval != MAXFLOAT)
-		     fprintf(fp,"%ld\n",lval);
-		  else
-		     fprintf(fp,"(null)\n");
-	       } else {
-		  lptr = (ossim_int32*)get_table_element(j,row,table,NULL,&n);
-		  for (k=0;k<n;k++) {
-		     if (lptr[k] != MAXFLOAT)
-			fprintf(fp,"%ld ",lptr[k]);
-		     else
-			fprintf(fp,"(null) ");
-		  }
-		  fprintf(fp,"\n");
-		  free(lptr);
-	       }
-	       break;
-	    case 'S':
-	       if (table.header[j].count==1) {
-		  get_table_element(j,row,table,&ival,&n);
-		  if (ival != MAXINT)
-		     fprintf(fp,"%d\n",ival);
-		  else
-		     fprintf(fp,"(null)\n");
-	       } else {
-		  iptr = (int*)get_table_element(j,row,table,NULL,&n);
-		  for (k=0;k<n;k++) {
-		     if (iptr[k] != MAXINT)
-			fprintf(fp,"%d ",iptr[k]);
-		     else
-			fprintf(fp,"(null) ");
-		  }
-		  fprintf(fp,"\n");
-		  free(iptr);
-	       }
-	       break;
-	    case 'F':
-	       if (table.header[j].count==1) {
-		  get_table_element(j,row,table,&fval,&n);
-		  if (fval != MAXFLOAT)
-		     fprintf(fp,"%f\n",fval);
-		  else
-		     fprintf(fp,"(null)\n");
-	       } else {
-		  fptr = (float*)get_table_element(j,row,table,NULL,&n);
-		  for (k=0;k<n;k++) {
-		     if (fptr[k] != MAXFLOAT)
-			fprintf(fp,"%f ",fptr[k]);
-		     else
-			fprintf(fp,"(null) ");
-		  }
-		  fprintf(fp,"\n");
-		  free(fptr);
-	       }
-	       break;
-	    case 'C':
-	       if (table.header[j].count==1) {
-		  get_table_element(j,row,table,&cval,&n);
-		  fprintf(fp,"(%f,%f)\n",cval.x,cval.y);
-	       } else {
-		  cptr = (coordinate_type*)get_table_element(j,row,table,NULL,&n);
-		  for (k=0;k<n;k++)
-		     fprintf(fp,"(%f,%f) ",cptr[k].x,cptr[k].y);
-		  fprintf(fp,"\n");
-		  free(cptr);
-	       }
-	       break;
-	    case 'K':
-	       if (table.header[j].count==1) {
-		  get_table_element(j,row,table,&kval,&n);
-		  fprintf(fp,"(%ld,%ld,%ld)\n",
-			  kval.id,kval.tile,kval.exid);
-	       } else {
-		  kptr = (id_triplet_type*)get_table_element(j,row,table,NULL,&n);
-		  for (k=0;k<n;k++)
-		     fprintf(fp,"(%ld,%ld,%ld)  ",
-			     kptr[k].id,kptr[k].tile,kptr[k].exid);
-		  fprintf(fp,"\n");
-		  free(kptr);
-	       }
-	       break;
-	    case 'D':   /* Date */
-	       if (table.header[j].count==1) {
-		  get_table_element(j,row,table,&dval,&n);
-		  format_date(dval,date);
-		  fprintf(fp,"%s\n",date);
-	       } else {
-		  dptr = (date_type*)get_table_element(j,row,table,NULL,&n);
-		  for (k=0;k<n;k++) {
-		     format_date((char*)(&dptr[k]),date);
-		     fprintf(fp,"%s ",date);
-		  }
-		  fprintf(fp,"\n");
-		  free(dptr);
-	       }
-	       break;
-	 }
+         fprintf(fp,"%s: ",table.header[j].name);
+         switch (table.header[j].type) {
+         case 'T':
+            if (table.header[j].count==1) {
+               get_table_element(j,row,table,&ch,&n);
+               fprintf(fp,"%c\n",ch);
+            } else {
+               buf = (char *)get_table_element(j,row,table,NULL,&n);
+               n = strlen(table.header[j].name) + 2;
+               for (k=0;(unsigned int)k<strlen(buf);k++) {
+                  fprintf(fp,"%c",buf[k]);
+                  n++;
+                  if (n>80) {
+                     fprintf(fp,"\n");
+                     n = 0;
+                  }
+               }
+               fprintf(fp,"\n");
+               free(buf);
+            }
+            break;
+         case 'I':
+            if (table.header[j].count==1) {
+               get_table_element(j,row,table,&lval,&n);
+               if (lval != MAXFLOAT)
+                  fprintf(fp,"%d\n",lval);
+               else
+                  fprintf(fp,"(null)\n");
+            } else {
+               lptr = (ossim_int32*)get_table_element(j,row,table,NULL,&n);
+               for (k=0;k<n;k++) {
+                  if (lptr[k] != MAXFLOAT)
+                     fprintf(fp,"%d ",lptr[k]);
+                  else
+                     fprintf(fp,"(null) ");
+               }
+               fprintf(fp,"\n");
+               free(lptr);
+            }
+            break;
+         case 'S':
+            if (table.header[j].count==1) {
+               get_table_element(j,row,table,&ival,&n);
+               if (ival != MAXINT)
+                  fprintf(fp,"%d\n",ival);
+               else
+                  fprintf(fp,"(null)\n");
+            } else {
+               iptr = (int*)get_table_element(j,row,table,NULL,&n);
+               for (k=0;k<n;k++) {
+                  if (iptr[k] != MAXINT)
+                     fprintf(fp,"%d ",iptr[k]);
+                  else
+                     fprintf(fp,"(null) ");
+               }
+               fprintf(fp,"\n");
+               free(iptr);
+            }
+            break;
+         case 'F':
+            if (table.header[j].count==1) {
+               get_table_element(j,row,table,&fval,&n);
+               if (fval != MAXFLOAT)
+                  fprintf(fp,"%f\n",fval);
+               else
+                  fprintf(fp,"(null)\n");
+            } else {
+               fptr = (float*)get_table_element(j,row,table,NULL,&n);
+               for (k=0;k<n;k++) {
+                  if (fptr[k] != MAXFLOAT)
+                     fprintf(fp,"%f ",fptr[k]);
+                  else
+                     fprintf(fp,"(null) ");
+               }
+               fprintf(fp,"\n");
+               free(fptr);
+            }
+            break;
+         case 'C':
+            if (table.header[j].count==1) {
+               get_table_element(j,row,table,&cval,&n);
+               fprintf(fp,"(%f,%f)\n",cval.x,cval.y);
+            } else {
+               cptr = (coordinate_type*)get_table_element(j,row,table,NULL,&n);
+               for (k=0;k<n;k++)
+                  fprintf(fp,"(%f,%f) ",cptr[k].x,cptr[k].y);
+               fprintf(fp,"\n");
+               free(cptr);
+            }
+            break;
+         case 'K':
+            if (table.header[j].count==1) {
+               get_table_element(j,row,table,&kval,&n);
+               fprintf(fp,"(%d,%d,%d)\n",
+                       kval.id,kval.tile,kval.exid);
+            } else {
+               kptr = (id_triplet_type*)get_table_element(j,row,table,NULL,&n);
+               for (k=0;k<n;k++)
+                  fprintf(fp,"(%d,%d,%d)  ",
+                          kptr[k].id,kptr[k].tile,kptr[k].exid);
+               fprintf(fp,"\n");
+               free(kptr);
+            }
+            break;
+         case 'D':   /* Date */
+            if (table.header[j].count==1) {
+               get_table_element(j,row,table,&dval,&n);
+               format_date(dval,date);
+               fprintf(fp,"%s\n",date);
+            } else {
+               dptr = (date_type*)get_table_element(j,row,table,NULL,&n);
+               for (k=0;k<n;k++) {
+                  format_date((char*)(&dptr[k]),date);
+                  fprintf(fp,"%s ",date);
+               }
+               fprintf(fp,"\n");
+               free(dptr);
+            }
+            break;
+         default:
+            break;
+         }
       }
       fprintf(fp,"\n");
       free_row( row, table );

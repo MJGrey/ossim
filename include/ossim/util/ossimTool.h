@@ -24,7 +24,8 @@ class OSSIM_DLL ossimTool : public ossimObject, public ossim::JsonInterface
 {
 public:
    ossimTool();
-   virtual ~ossimTool();
+
+   ~ossimTool() override;
 
    /**
     * Initializes from command line arguments.

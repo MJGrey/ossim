@@ -94,7 +94,12 @@ bool ossimTool::initialize(ossimArgumentParser& ap)
 void ossimTool::initialize(const ossimKeywordlist& kwl)
 {
    m_helpRequested = false;
-   m_kwl = kwl;
+   if (&kwl != &m_kwl)
+   {
+      // Start with clean options keyword list.
+      m_kwl.clear();
+      m_kwl.addList(kwl, true);
+   }
 }
 
 void ossimTool::getKwlTemplate(ossimKeywordlist& kwl)

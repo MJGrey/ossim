@@ -24,6 +24,8 @@
 
 using namespace std;
 
+const char* ossimPointCloudTool::DESCRIPTION = "Performs specified processing on point-cloud data.";
+
 ossimPointCloudTool::ossimPointCloudTool()
 :  m_operation (LOWEST_DEM),
    m_gsd (0)
