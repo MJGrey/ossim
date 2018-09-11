@@ -8,6 +8,8 @@
 #include <ossim/util/ossimEqualityTest.h>
 #include <ossim/base/ossimApplicationUsage.h>
 #include <ossim/base/ossimException.h>
+#include <ossim/imaging/ossimImageHandlerRegistry.h>
+#include <ossim/imaging/ossimImageSourceSequencer.h>
 
 using namespace std;
 
@@ -19,10 +21,12 @@ const char* ossimEqualityTest::DESCRIPTION =
 #define CFATAL ossimNotify(ossimNotifyLevel_FATAL)
 #define DEBUG_ENABLED true
 
+typedef ossimRefPtr<ossimImageSourceSequencer> SequencerPtrType;
+
 ossimEqualityTest::ossimEqualityTest()
-:   m_corrThreshold (0.99),
-    m_maxSizeDiff (1),
-    m_tileSize (1024)
+:   m_corrThreshold (1.0),
+    m_maxSizeDiff (0),
+    m_testPassed (false)
 {
 }
 
@@ -32,18 +36,16 @@ void ossimEqualityTest::setUsage(ossimArgumentParser& ap)
    ossimApplicationUsage* au = ap.getApplicationUsage();
    ossimString appName = ap.getApplicationName();
    ossimString usageString = appName;
-   usageString += " equalityTest [options] <imageA> <imageB> ";
+   usageString += " equality [options] <imageA> <imageB> ";
    au->setCommandLineUsage(usageString);
 
    // Set the command line options:
    au->addCommandLineOption(
          "--size-tolerance <int>", "Max allowed difference in size between images before flagging "
-         "difference. Defaults to 1 pixel.");
+         "difference. Defaults to 0 pixel.");
    au->addCommandLineOption(
-         "--threshold <double>", "Normalized correlation threshold for accepting image comparison.");
-   au->addCommandLineOption(
-         "--tile-size <n>", "Specifies the square tile size in pixels to use when sampling random "
-         "tiles. Defaults to 1024");
+         "--threshold <double>", "Normalized correlation threshold for accepting image comparison."
+         " Defaults to 1.0 (exact match).");
 
    // Base class has its own:
    ossimTool::setUsage(ap);
@@ -76,12 +78,6 @@ bool ossimEqualityTest::initialize(ossimArgumentParser& ap)
          m_corrThreshold = 0.0;
    }
 
-   if ( ap.read("--tile-size", sp1) )
-   {
-      unsigned int n = ts1.toUInt32();
-      m_tileSize = ossimIpt(n,n);
-   }
-
    if ( ap.argc() < 2 )
    {
       xmsg<<"Expecting more arguments.";
@@ -100,29 +96,25 @@ void ossimEqualityTest::createInputChain(const ossimFilename& fname, ossim_uint3
 {
    ostringstream xmsg;
 
-   // Init chain with handler:
-   ossimRefPtr<ossimSingleImageChain> chain = new ossimSingleImageChain;
-   if (!chain->open(fname))
+   // Establish input image handler:
+   ossimRefPtr<ossimImageHandler> handler = ossimImageHandlerRegistry::instance()->open(fname);
+   if (!handler)
    {
-      xmsg<<"ERROR: ossimEqualityTest ["<<__LINE__<<"] Could not open <"<<fname<<">"<<ends;
+      xmsg<<"ERROR: ossimEqualityTest:"<<__LINE__<<" -- Could not open <"<<fname<<">"<<ends;
       throw ossimException(xmsg.str()); // NOLINT
    }
-   ossimImageHandler* handler = chain->getImageHandler().get();
    if (!handler->setCurrentEntry( entry_index ))
    {
-      xmsg << " ERROR: ossimEqualityTest ["<<__LINE__<<"] Entry " << entry_index << " out of range!" << std::endl;
+      xmsg<<" ERROR: ossimEqualityTest:"<<__LINE__<<" -- Entry " <<entry_index<< " out of range!"<<endl;
       throw ossimException( xmsg.str() ); // NOLINT
    }
 
-   ossimRefPtr<ossimScalarRemapper> remapper = new ossimScalarRemapper();
-   chain->add(remapper.get());
-   remapper->setOutputScalarType(OSSIM_NORMALIZED_DOUBLE);
-
-   m_imgLayers.push_back(chain);
+   m_images.push_back(handler);
 }
 
 bool ossimEqualityTest::execute()
 {
+   m_testPassed = false;
    if (m_helpRequested)
       return true;
 
@@ -130,122 +122,118 @@ bool ossimEqualityTest::execute()
    createInputChain(m_imgNames[0]);
    createInputChain(m_imgNames[1]);
 
-   // Check size for differences:
-   ossimIpt sizeA(m_imgLayers[0]->getBoundingRect().size());
-   ossimIpt sizeB(m_imgLayers[1]->getBoundingRect().size());
-   ossimIpt dSize(sizeA - sizeB);
-   if ((dSize.x > m_maxSizeDiff) || (dSize.y > m_maxSizeDiff))
+   while (true)
    {
-      m_response = R"({ "test": "failed", "reason": "size-mismatch" })";
-      return false;
-   };
-
-   // Check number of bands:
-   unsigned int nBandsA = m_imgLayers[0]->getNumberOfOutputBands();
-   unsigned int nBandsB = m_imgLayers[1]->getNumberOfOutputBands();
-   if (nBandsA != nBandsB)
-   {
-      m_response = R"({ "test": "failed", "reason": "band-mismatch" })";
-      return false;
-   };
-
-   // Check radiometry:
-   ossimScalarType sA = m_imgLayers[0]->getOutputScalarType();
-   ossimScalarType sB = m_imgLayers[1]->getOutputScalarType();
-   if (sA != sB)
-   {
-      m_response = R"({ "test": "failed", "reason": "scalar-type-mismatch" })";
-      return false;
-   };
-
-   // All easy tests passed. Need do image processing next. The result is a list of cross
-   // correlation coefficients for each band. In order for the test to pass, all bands must meet
-   // threshold criteria:
-   std::vector<double> correlations;
-   computeCrossCorrelation(correlations);
-   for (int b=0; b<nBandsA; ++b)
-   {
-      if (correlations[b] < m_corrThreshold)
+      // Check size for differences:
+      ossimIpt sizeA(m_images[0]->getBoundingRect().size());
+      ossimIpt sizeB(m_images[1]->getBoundingRect().size());
+      ossimIpt dSize(sizeA - sizeB);
+      if ((dSize.x > m_maxSizeDiff) || (dSize.y > m_maxSizeDiff))
       {
-         m_response = R"({ "test": "failed", "reason": "low-correlation" })";
-         return false;
+         CINFO << "ossimEqualityTest: FAILED size-mismatch" << endl;
+         m_response = R"({ "test": "failed", "reason": "size-mismatch" })";
+         break;
+      };
+
+      // Check number of bands:
+      unsigned int nBandsA = m_images[0]->getNumberOfOutputBands();
+      unsigned int nBandsB = m_images[1]->getNumberOfOutputBands();
+      if (nBandsA != nBandsB)
+      {
+         CINFO << "\nossimEqualityTest: FAILED band-mismatch" << endl;
+         m_response = R"({ "test": "failed", "reason": "band-mismatch" })";
+         break;
+      };
+
+      // Check radiometry:
+      ossimScalarType sA = m_images[0]->getOutputScalarType();
+      ossimScalarType sB = m_images[1]->getOutputScalarType();
+      if (sA != sB)
+      {
+         CINFO << "\nossimEqualityTest: FAILED scalar-type-mismatch" << endl;
+         m_response = R"({ "test": "failed", "reason": "scalar-type-mismatch" })";
+         break;
+      };
+
+      // All easy tests passed. Need do image processing next. Set up sequencers and loop over tiles:
+      SequencerPtrType sequencerA = new ossimImageSourceSequencer(m_images[0].get());
+      SequencerPtrType sequencerB = new ossimImageSourceSequencer(m_images[1].get());
+      m_testPassed = true;
+      m_tileA = sequencerA->getNextTile();
+      m_tileB = sequencerB->getNextTile();
+      while (m_tileA && m_tileB && m_testPassed)
+      {
+         if (m_corrThreshold == 1.0)
+            doPixelComparisonTest(); // exact match
+         else
+            doCrossCorrelationTest(); // close match
+
+         m_tileA = sequencerA->getNextTile();
+         m_tileB = sequencerB->getNextTile();
       }
+
+      if (m_testPassed)
+      {
+         CINFO << "\nossimEqualityTest: PASSED" << endl;
+         m_response = R"({ "test": "passed" })";
+      }
+      else
+      {
+         CINFO << "\nossimEqualityTest: FAILED pixel-mismatch" << endl;
+         m_response = R"({ "test": "failed", "reason": "pixel-mismatch" })";
+      }
+      break;
    }
 
-   m_response = R"({ "test": "passed" })";
    return true;
 }
 
-void ossimEqualityTest::computeCrossCorrelation(std::vector<double>& correlations)
+bool ossimEqualityTest::doCrossCorrelationTest()
 {
-   // Set up the cross-correlation
-   // computation source:
-   ossimRefPtr<ossimCrossCorrSource> crossCorrSource = new ossimCrossCorrSource;
-   crossCorrSource->connectMyInputTo(0, m_imgLayers[0].get());
-   crossCorrSource->connectMyInputTo(1, m_imgLayers[1].get());
-   crossCorrSource->initialize();
+   if (DEBUG_ENABLED)
+      CINFO << "\nossimEqualityTest::doCrossCorrelationTest() Results for tile:" << endl;
 
-   // Determine whether necessary to do sparse sampling or full image correlation:
-   ossimIrect imgRect (crossCorrSource->getBoundingRect());
-   int nx = imgRect.width()/m_tileSize.x;
-   if (nx > 5)
-      nx = 5;
-   else if (nx < 1)
+   // Loop over all pixels in the tiles for each band and compute cross-correlation:
+   unsigned int numBands = m_tileA->getNumberOfBands();
+   unsigned int numPix = m_tileA->getSizePerBand();
+   for (int band = 0; (band < numBands) && m_testPassed; ++band)
    {
-      nx = 1;
-      m_tileSize.x = imgRect.width();
-   }
-   int ny = imgRect.height()/m_tileSize.y;
-   if (ny > 5)
-      ny = 5;
-   else if (ny < 1)
-   {
-      ny = 1;
-      m_tileSize.y = imgRect.height();
-   }
-   int xMax = imgRect.width()-m_maxSizeDiff;
-   int yMax = imgRect.height()-m_maxSizeDiff;
-   int dx = (xMax)/nx;
-   int dy = (yMax)/ny;
-   int numTilesSampled = 0;
-   unsigned int nBands = crossCorrSource->getNumberOfOutputBands();
-   for (int b=0; b<nBands; ++b)
-      correlations.push_back(0.0);
-
-   // Now loop over sampling tiles, accumulating the correlation coefficient for each:
-   ossimIpt tileOrigin (0,0);
-   for (; tileOrigin.y<yMax; tileOrigin.y+=dy)
-   {
-      for (; tileOrigin.x<xMax; tileOrigin.x+=dx)
+      double sumA2 = 0, sumB2 = 0, sumAB = 0;
+      double avgA = (double) m_tileA->computeAverageBandValue(band);
+      double avgB = (double) m_tileB->computeAverageBandValue(band);
+      for (unsigned int p = 0; p < numPix; ++p)
       {
-         ossimIrect tileRect (tileOrigin, (unsigned int) m_tileSize.x, (unsigned int) m_tileSize.y);
-         crossCorrSource->getTile(tileRect);
-         const vector<double>& tileCorrs = crossCorrSource->getCrossCorrelations();
-         for (int b=0; b<nBands; ++b)
-            correlations[b] += tileCorrs[b];
+         double a = (double) m_tileA->getPix(p, band) - avgA;
+         double b = (double) m_tileB->getPix(p, band) - avgB;
+         sumA2 += a * a;
+         sumB2 += b * b;
+         sumAB += a * b;
+      }
 
-         ++numTilesSampled;
+      double correlation = sumAB / sqrt(sumA2 * sumB2);
 
-         if (DEBUG_ENABLED)
-         {
-            CINFO<<"\nossimEqualityTest:"<<__LINE__<<" results for tile #"<<numTilesSampled<<endl;
-            for (int b=0; b<nBands; ++b)
-               CINFO<<"\n    correlation["<<b<<"] = "<<correlations[b]<<endl;
-         }
+      if (DEBUG_ENABLED)
+         CINFO << "    correlation[" << band << "] = " << correlation << endl;
 
+      if (correlation < m_corrThreshold)
+         m_testPassed = false;
+   }
+}
+
+bool ossimEqualityTest::doPixelComparisonTest()
+{
+   // Loop over all pixels in the tiles for each band and compute cross-correlation:
+   unsigned int numBands = m_tileA->getNumberOfBands();
+   unsigned int numPix = m_tileA->getSizePerBand();
+   for (int band = 0; (band < numBands) && m_testPassed; ++band)
+   {
+      for (unsigned int p = 0; (p<numPix) && m_testPassed; ++p)
+      {
+         double a = (double) m_tileA->getPix(p, band);
+         double b = (double) m_tileB->getPix(p, band);
+         if (a != b)
+            m_testPassed = false;
       }
    }
-
-   // Take average:
-   for (int b=0; b<nBands; ++b)
-      correlations[b] = correlations[b] / (double) numTilesSampled;
-
-   if (DEBUG_ENABLED)
-   {
-      CINFO<<"\nossimEqualityTest:"<<__LINE__<<" results for all tiles: "<<endl;
-      for (int b=0; b<nBands; ++b)
-         CINFO<<"\n    correlation["<<b<<"] = "<<correlations[b]<<endl;
-   }
-
 }
 

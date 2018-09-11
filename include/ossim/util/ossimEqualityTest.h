@@ -9,8 +9,7 @@
 #define ossimEqualityTest_HEADER
 
 #include <ossim/util/ossimTool.h>
-#include <ossim/imaging/ossimSingleImageChain.h>
-#include <ossim/imaging/ossimCrossCorrSource.h>
+#include <ossim/imaging/ossimImageHandler.h>
 #include <ossim/base/ossimRefPtr.h>
 #include <ossim/base/ossimFilename.h>
 #include <vector>
@@ -51,15 +50,23 @@ public:
    /** Used by ossimToolFactory */
    static const char* DESCRIPTION;
 
+   /** Fetch pass/fail status after execute is called */
+   bool testPassed() const { return m_testPassed; }
+
 protected:
    void createInputChain(const ossimFilename& fname, ossim_uint32 entry_index=0);
-   void computeCrossCorrelation(std::vector<double>& correlations);
+   bool doCrossCorrelationTest();
+   bool doPixelComparisonTest();
 
    double m_corrThreshold;
    unsigned int m_maxSizeDiff;
    ossimIpt m_tileSize;
-   std::vector< ossimRefPtr<ossimSingleImageChain> > m_imgLayers;
+   std::vector< ossimRefPtr<ossimImageHandler> > m_images;
    std::vector< ossimFilename > m_imgNames;
+   bool m_testPassed;
+   ossimRefPtr<ossimImageData> m_tileA;
+   ossimRefPtr<ossimImageData> m_tileB;
+
 };
 
 #endif
